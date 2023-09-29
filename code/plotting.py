@@ -5,126 +5,15 @@ import glob
 from os.path import join, exists
 from sklearn.metrics import mean_squared_error as mse
 from os import makedirs
+from critdd import Diagram
 
 from datasets.dataloading import get_all_datasets
-from utils import get_sax_postfix
-from single_models import get_sax_postfix, get_single_models
+from single_models import get_single_models
 from train_single_models import load_data
 from experiments import results_path
 
-postfixes_to_plot = ['real', 'quant3', 'quant5', 'quant7', 'quant12', 'quant25']
 
 output_mapping = {}
-
-def create_cd_diagram(sax_alphabet_size):
-    from critdd import Diagram
-
-    postfix = get_sax_postfix(sax_alphabet_size)
-    used_datasets = 0
-    total_datasets = len(get_all_datasets())
-
-
-    for split in ['val', 'test']:
-        losses = []
-        model_names, _ = get_single_models()
-        model_names = [name + '-' + postfix for name in model_names]
-
-        for ds_name, ds_index in get_all_datasets():
-            ds_path = join(results_path, f'{split}_{ds_name}_#{str(ds_index)}.csv')
-            if exists(ds_path):
-                df = pd.read_csv(ds_path)
-                y = df['y'].to_numpy().squeeze()
-                scores = []
-
-                for model_name in model_names:
-                    pred = df[model_name].to_numpy().squeeze()
-                    scores.append(mse(y, pred, squared=False)) # RMSE
-
-                losses.append(np.array(scores))
-                used_datasets += 1
-
-        model_names = [x.replace('_', '-') for x in model_names]
-        model_names = [x.replace('-real', '') for x in model_names]
-        losses = np.vstack(losses)
-
-        for ds_idx, ds_loss_row in enumerate(losses):
-            for l_idx, l in enumerate(ds_loss_row):
-                equals = np.where(l == ds_loss_row)[0]
-                if not (len(equals) == 1 and equals[0] == l_idx):
-                    print(ds_idx, l_idx, equals)
-
-        print(f'Used {used_datasets} datasets from {total_datasets}')
-
-        diagram = Diagram(
-            losses,
-            treatment_names=model_names,
-            maximize_outcome=False
-        )
-
-        diagram.to_file(f'plots/cd-single-models-{split}-{postfix}.tex', title=f'Single model performances {split} {postfix}')
-
-def create_cd_best_overall():
-    from critdd import Diagrams
-
-    model_names, _ = get_single_models()
-    diagram_names = postfixes_to_plot
-
-    critt_df = pd.DataFrame()
-
-    # Create pandas dataframe to send to critd
-
-    for ds_name, ds_index in get_all_datasets():
-        ds_path = join(results_path, f'test_{ds_name}_#{str(ds_index)}.csv')
-        full_ds_name = f'{ds_name}-{ds_index}'
-
-        if exists(ds_path):
-            df = pd.read_csv(ds_path)
-            y = df['y'].to_numpy().squeeze()
-
-
-            for postfix in postfixes_to_plot:
-                for model_name in model_names:
-                    pred = df[model_name + '-' + postfix].to_numpy().squeeze()
-                    loss = mse(y, pred, squared=False) # RMSE
-                    critt_df = critt_df.append({'dataset': full_ds_name, 'method': model_name, 'loss': loss, 'diagram': postfix }, ignore_index=True)
-
-    print(critt_df)
-    # construct a sequence of CD diagrams
-    treatment_names = critt_df["method"].unique()
-    diagram_names = critt_df["diagram"].unique()
-    Xs = [] # collect an (n,k)-shaped matrix for each diagram
-    for n in diagram_names:
-        diagram_df = critt_df[critt_df.diagram == n].pivot(
-            index = "dataset",
-            columns = "method",
-            values = "loss"
-        )[treatment_names] # ensure a fixed order of treatments
-        Xs.append(diagram_df.to_numpy())
-    two_dimensional_diagram = Diagrams(
-        np.stack(Xs),
-        diagram_names = diagram_names,
-        treatment_names = treatment_names,
-        maximize_outcome = False
-    )
-
-    two_dimensional_diagram.to_file(
-        "plots/2d_example.tex",
-    )
-
-    # Print top 5 models overall (in terms of mean loss over all datasets)
-    model_wins = {}
-    for ds_name, ds_index in get_all_datasets():
-        full_ds_name = f'{ds_name}-{ds_index}'
-        df = critt_df[critt_df['dataset'] == full_ds_name]
-        df['full_model_name'] = df['method'] + '-' + df['diagram']
-        best_model_index = np.argmin(df['loss'])
-        best_model_name = df.iloc[best_model_index].full_model_name
-        try:
-            model_wins[best_model_name] += 1
-        except KeyError:
-            model_wins[best_model_name] = 1
-
-    print(model_wins)
 
 def create_single_prediction_files():
 
@@ -136,7 +25,6 @@ def create_single_prediction_files():
         'TSMS-St',
         'TSMS-Per',
     ]
-    postfix = 'real'
 
     makedirs(f'single_predictions/', exist_ok=True)
     makedirs(f'train_data_csv/', exist_ok=True)
@@ -158,14 +46,14 @@ def create_single_prediction_files():
                 new_df['y'] = y
 
                 for model_name in model_names:
-                    full_model_name = model_name + '-' + postfix
+                    full_model_name = model_name 
                     pred = df[full_model_name].to_numpy().squeeze()
                     full_model_name = output_mapping.get(full_model_name, full_model_name)
                     new_df[full_model_name] = pred
 
                 if split == 'test':
                     for selector_name in included_selections:
-                        full_selector_name = selector_name + '-' + postfix
+                        full_selector_name = selector_name 
                         pred = df[full_selector_name].to_numpy().squeeze()
                         full_selector_name = output_mapping.get(full_selector_name, full_selector_name)
                         new_df[full_selector_name] = pred
@@ -174,7 +62,6 @@ def create_single_prediction_files():
             new_df.to_csv(new_ds_path)
 
 def create_cd_diagram_compositors():
-    from critdd import Diagram
 
     used_datasets = 0
     makedirs('plots', exist_ok=True)
@@ -183,14 +70,14 @@ def create_cd_diagram_compositors():
     single_names, _ = get_single_models()
 
     selector_names = [
-        'best-case-real',
-        'worst-case-real',
-        'TSMS-real',
-        'TSMS-St-real',
-        'TSMS-Per-real',
+        'best-case',
+        'worst-case',
+        'TSMS',
+        'TSMS-St',
+        'TSMS-Per',
     ]
 
-    selector_names += [sn + '-real' for sn in single_names]
+    selector_names += [sn for sn in single_names]
 
     for ds_name, ds_index in get_all_datasets():
         ds_path = join(results_path, f'test_{ds_name}_#{str(ds_index)}.csv')
@@ -209,7 +96,7 @@ def create_cd_diagram_compositors():
     losses = np.vstack(losses)
 
     selector_names = [output_mapping.get(name, name) for name in selector_names]
-    selector_names = [name.replace('-real', '') for name in selector_names]
+    #selector_names = [name.replace('-real', '') for name in selector_names]
 
     diagram = Diagram(
         losses,
@@ -229,9 +116,6 @@ def create_cd_diagram_compositors():
 # Latex table export
 def export_table(array, path):
 
-    def add_space(x):
-        return x + '~~~~'
-
     map_names = {
         'pred.es': 'ETS',
         'pred.a': 'ARIMA',
@@ -242,10 +126,10 @@ def export_table(array, path):
         'pred.dets.single': 'DETS',
         'pred.ade.single': 'ADE',
         'pred.cnn.lstm10': 'CNN-LSTM',
-        'rf-8-real': 'Best-Single',
-        'TSMS-Per-real': '\\textbf{TSMS-Per}',
-        'TSMS-St-real': '\\textbf{TSMS-St}',
-        'TSMS-real': '\\textbf{TSMS}'
+        'rf-8': 'Best-Single',
+        'TSMS-Per': '\\textbf{TSMS-Per}',
+        'TSMS-St': '\\textbf{TSMS-St}',
+        'TSMS': '\\textbf{TSMS}'
     }
 
     df = pd.DataFrame()
@@ -259,8 +143,7 @@ def export_table(array, path):
 def create_comparison_graphic():
     ### --- Find best single predictor ---
     single_names = pd.read_csv('single_predictions/val_electricity_hourly_#0.csv', index_col=0).drop(columns=['y']).columns.tolist()
-    compositor_models = ['TSMS-real', 'TSMS-St-real', 'TSMS-Per-real']
-    #baseline_models = ['pred.lstm10', 'pred.cnn.lstm10', 'pred.cnn', 'pred.knn', 'pred.rf', 'pred.dets.single', 'pred.ade.single', 'pred.gbm', 'pred.a', 'pred.es']
+    compositor_models = ['TSMS', 'TSMS-St', 'TSMS-Per']
     baseline_models = ['pred.cnn.lstm10', 'pred.cnn', 'pred.knn', 'pred.dets.single', 'pred.ade.single', 'pred.a', 'pred.es']
 
     test_file_paths = sorted(glob.glob('single_predictions/test_*'))
@@ -317,8 +200,8 @@ def create_comparison_graphic():
         #ranks[idx] = np.argsort(np.argsort(scores))
         
         # Normalize losses
-        best_loss = mse(y, df_test['best-case-real'], squared=False)
-        worst_loss = mse(y, df_test['worst-case-real'], squared=False)
+        best_loss = mse(y, df_test['best-case'], squared=False)
+        worst_loss = mse(y, df_test['worst-case'], squared=False)
         losses[idx] = (np.array(scores) - best_loss) / (worst_loss - best_loss)
 
     ranks = np.argsort(np.argsort(losses, axis=1), axis=1)+1
@@ -333,13 +216,6 @@ def create_comparison_graphic():
 
     export_table(to_export, 'plots/ranking_table.tex')
 
-    from critdd import Diagram
-    diagram = Diagram(
-        losses,
-        treatment_names=all_model_names,
-        maximize_outcome=False,
-    )
-    diagram.to_file('plots/main_comp.pdf', axis_options={'title': 'Rank comparison'})
 
 def parse_result_table():
     path = 'tsms-results.csv'

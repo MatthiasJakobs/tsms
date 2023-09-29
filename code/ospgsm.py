@@ -63,16 +63,6 @@ class OS_PGSM_St_Faster:
         self.old_roc = old_roc
 
     def rebuild(self, X):
-        # if self.old_roc:
-        #     rocs = [ [] for _ in range(len(self.models))]
-        #     x_c, y_c = windowing(X, self.big_lag, z=self.big_lag)
-        #     for x, y in zip(x_c, y_c):
-        #         cams, best_model = self.evaluate_on_validation(x)
-        #         rocs_i, complete_xy = self.calculate_rocs(x, y, cams)
-        #         if rocs_i is not None:
-        #             rocs[best_model].extend(rocs_i)
-        #     return rocs
-        # else:
 
         rocs = [ [] for _ in range(len(self.models))]
         rocs_complete = [ [] for _ in range(len(self.models))]
@@ -284,10 +274,7 @@ class OS_PGSM_Faster(OS_PGSM_St_Faster):
             self.test_forecasters.append(best_model)
             predictions.append(self.models[best_model].predict(x.reshape(1, -1)))
 
-        # if len(self.drifts_detected) != 0:
-        #     print('drifts', len(self.drifts_detected))
         return np.concatenate([X_test[:self.lag], np.concatenate(predictions)])
-
 
 class OS_PGSM_Periodic(OS_PGSM_Faster):
 
@@ -306,14 +293,11 @@ class OS_PGSM_Periodic(OS_PGSM_Faster):
 
 def runtime_measurement():
     data = get_all_datasets()
-    # rng = np.random.RandomState(958717)
-    # random_indices = rng.choice(np.arange(len(data)), size=15, replace=False)
-    # data = [data[idx] for idx in random_indices]
 
     runtimes = np.zeros((len(data), 3))
     for idx, (ds_name, ds_index) in tqdm(enumerate(data), total=len(data)):
         X_train, X_val, X_test = load_data(ds_name, ds_index)
-        models = load_models(ds_name, ds_index, None, False)
+        models = load_models(ds_name, ds_index, False)
 
         comp = OS_PGSM_St_Faster(models, lag=15, big_lag=25, threshold=0.01, min_roc_length=3)
         before = time.time()
@@ -385,7 +369,7 @@ def hyperparameter_testing():
 
     for row_idx, (ds_name, ds_index) in enumerate(data):
         X_train, X_val, X_test = load_data(ds_name, ds_index)
-        models = load_models(ds_name, ds_index, None, False)
+        models = load_models(ds_name, ds_index, False)
 
         for col_idx, (blag, thresh, min_length) in enumerate(hyperparameter_combos):
             comp = OS_PGSM_Faster(models, lag=15, big_lag=blag, threshold=thresh, old_roc=False)

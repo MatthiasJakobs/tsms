@@ -1,4 +1,3 @@
-import torch
 import pandas as pd
 import numpy as np
 import tqdm
@@ -8,12 +7,10 @@ import warnings
 from os.path import exists, join
 from os import makedirs
 from joblib import Parallel, delayed
-from tsx.quantizers import z_norm, KernelSAX
 from datasets.dataloading import load_dataset, get_all_datasets
-from single_models import get_sax_postfix, get_single_models, load_models
+from single_models import get_single_models, load_models
 from tsx.datasets.utils import windowing
 from experiments import results_path, lag
-from utils import get_sax_postfix
 
 warnings.filterwarnings("ignore")
 
@@ -36,10 +33,9 @@ def load_data(ds_name, ds_index):
 
     return X_train, X_val, X_test
 
-def train(sax_alphabet_size):
+def train():
 
-    def _run_parallel(ds_name, ds_index, sax_alphabet_size):
-        postfix = get_sax_postfix(sax_alphabet_size)
+    def _run_parallel(ds_name, ds_index):
         model_names, models = get_single_models()
 
         makedirs('models', exist_ok=True)
@@ -53,31 +49,23 @@ def train(sax_alphabet_size):
 
         for (model_name, model) in zip(model_names, models):
 
-            save_path = f"models/{ds_name}/{ds_index}_{model_name}_{postfix}"
+            save_path = f"models/{ds_name}/{ds_index}_{model_name}"
             if exists(save_path):
                 continue
 
             model.fit(X, y)
 
             with open(save_path, 'wb') as _F:
-                # from sklearn.utils.validation import check_is_fitted
-                # check_is_fitted(model)
                 pickle.dump(model, _F)
 
     n_jobs = -1
-    postfix = get_sax_postfix(sax_alphabet_size)
-    Parallel(n_jobs=n_jobs, backend='loky')(delayed(_run_parallel)(ds_name, ds_index, sax_alphabet_size) for (ds_name, ds_index) in tqdm.tqdm(get_all_datasets(), desc=f'train {postfix}'))
-    # for (ds_name, ds_index) in get_all_datasets():
-    #     print(ds_name, ds_index)
-    #     _run_parallel(ds_name, ds_index, None)
+    Parallel(n_jobs=n_jobs, backend='loky')(delayed(_run_parallel)(ds_name, ds_index) for (ds_name, ds_index) in tqdm.tqdm(get_all_datasets(), desc='train'))
 
-def evaluate(sax_alphabet_size):
+def evaluate():
 
-    def _run_parallel(ds_name, ds_index, sax_alphabet_size):
-        postfix = get_sax_postfix(sax_alphabet_size)
+    def _run_parallel(ds_name, ds_index):
 
-        #_, _, X_val_windowed, _, X_test_windowed, _, _, X_val, X_test = load_data(ds_name, ds_index)
-        X_train, X_val, X_test = load_data(ds_name, ds_index)
+        _, X_val, X_test = load_data(ds_name, ds_index)
         X_val_windowed, _ = windowing(X_val, L=lag)
         X_test_windowed, _ = windowing(X_test, L=lag)
 
@@ -99,30 +87,25 @@ def evaluate(sax_alphabet_size):
             else:
                 prediction_csv = pd.read_csv(csv_path, header=0, index_col=0)
 
-            models, model_names = load_models(ds_name, ds_index, sax_alphabet_size=sax_alphabet_size, return_names=True)
+            models, model_names = load_models(ds_name, ds_index, return_names=True)
 
             for (model_name, model) in zip(model_names, models):
 
                 preds = model.predict(X_windowed).squeeze()
 
                 preds = np.concatenate([X[:lag].squeeze(), preds])
-                prediction_csv[model_name + '-' + postfix] = preds
+                prediction_csv[model_name] = preds
                 prediction_csv.to_csv(csv_path)
 
     n_jobs = -1
-    postfix = get_sax_postfix(sax_alphabet_size)
-    Parallel(n_jobs=n_jobs, backend='loky')(delayed(_run_parallel)(ds_name, ds_index, sax_alphabet_size) for (ds_name, ds_index) in tqdm.tqdm(get_all_datasets(), desc=f'eval {postfix}'))
-    # for (ds_name, ds_index) in get_all_datasets():
-    #     print(ds_name, ds_index)
-    #     _run_parallel(ds_name, ds_index, None)
+    Parallel(n_jobs=n_jobs, backend='loky')(delayed(_run_parallel)(ds_name, ds_index) for (ds_name, ds_index) in tqdm.tqdm(get_all_datasets(), desc='eval'))
 
-def train_and_evaluate(sax_alphabet_size):
-    train(sax_alphabet_size)
-    evaluate(sax_alphabet_size)
+def train_and_evaluate():
+    train()
+    evaluate()
 
 def main():
-    train(None)
-    evaluate(None)
+    train_and_evaluate()
 
 if __name__ == "__main__":
     main()

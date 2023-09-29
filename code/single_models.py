@@ -6,16 +6,13 @@ from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.utils.validation import check_is_fitted
 from itertools import product
-from utils import get_sax_postfix
 
-def load_models(ds_name, ds_index, sax_alphabet_size=None, return_names=False):
+def load_models(ds_name, ds_index, return_names=False):
     loaded_models = []
     model_names, models = get_single_models()
 
-    postfix = get_sax_postfix(sax_alphabet_size)
-
     for (model_name, model) in zip(model_names, models):
-        save_path = f'models/{ds_name}/{ds_index}_{model_name}_{postfix}'
+        save_path = f'models/{ds_name}/{ds_index}_{model_name}'
         with open(save_path, 'rb') as _F:
             model = pickle.load(_F)
 

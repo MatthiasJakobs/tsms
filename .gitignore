@@ -31,3 +31,4 @@ code/datasets/series_old
 *.log
 *.csv
 *.npy
+testenv

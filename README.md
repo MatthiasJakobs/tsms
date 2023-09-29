@@ -12,5 +12,11 @@ pip install -r requirements.txt
 ```
 python code/datasets/monash_forecasting.py
 python code/run_experiments.py
-python code/explainability.py
+```
+
+or 
+
+```
+chmod +x run.sh
+./run.sh
 ```
